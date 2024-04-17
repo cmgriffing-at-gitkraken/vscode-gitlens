@@ -36,17 +36,16 @@ export class OpenAIProvider implements AIProvider<'openai'> {
 
 	async generateCommitMessage(diff: string, options?: { context?: string }): Promise<string | undefined> {
 		const apiKey = await getApiKey(this.container.storage);
-		if (apiKey == null) return undefined;
+		// if (apiKey == null) return undefined;
 
 		let model = await this.getOrChooseModel();
 		if (model == null) return undefined;
 
 		if (model === 'custom') {
-			const customModel = configuration.get('ai.experimental.openai.customModel') || '';
-			model = customModel ? `${customModel}` : undefined;
+			model = configuration.get('ai.experimental.openai.customModel') || '';
 		}
 		// Might need to notify the user that they need to set a custom model name
-		if (model == null) return undefined;
+		if (!model) return undefined;
 
 		let retries = 0;
 		let maxCodeCharacters = getMaxCharacters(model, 2600);
@@ -132,6 +131,7 @@ Follow the user's instructions carefully, don't repeat yourself, don't include t
 			}
 
 			const data: OpenAIChatCompletionResponse = await rsp.json();
+			console.log({data})
 			const message = data.choices[0].message.content.trim();
 			return message;
 		}
@@ -139,14 +139,14 @@ Follow the user's instructions carefully, don't repeat yourself, don't include t
 
 	async explainChanges(message: string, diff: string): Promise<string | undefined> {
 		const apiKey = await getApiKey(this.container.storage);
-		if (apiKey == null) return undefined;
+		// if (apiKey == null) return undefined;
 
 		let model = await this.getOrChooseModel();
 		if (model == null) return undefined;
 
+
 		if (model === 'custom') {
-			const customModel = configuration.get('ai.experimental.openai.customModel') || '';
-			model = customModel ? `${customModel}` : undefined;
+			model = configuration.get('ai.experimental.openai.customModel') || '';
 		}
 		// Might need to notify the user that they need to set a custom model name
 		if (model == null) return undefined;
@@ -226,15 +226,26 @@ Do not make any assumptions or invent details that are not supported by the code
 		}
 	}
 
-	private fetch(apiKey: string, request: OpenAIChatCompletionRequest) {
+	private fetch(apiKey: string | undefined, request: OpenAIChatCompletionRequest) {
 		const url = this.url;
 		const isAzure = url.includes('.azure.com');
+
+		let authHeader = {};
+
+		if(isAzure) {
+			authHeader = { 'api-key': apiKey }
+		} else if(apiKey) {
+			authHeader = { Authorization: `Bearer ${apiKey}` }
+		}
+
+		const headers = {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...authHeader,
+		}
+
 		return fetch(url, {
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				...(isAzure ? { 'api-key': apiKey } : { Authorization: `Bearer ${apiKey}` }),
-			},
+			headers,
 			method: 'POST',
 			body: JSON.stringify(request),
 		});
