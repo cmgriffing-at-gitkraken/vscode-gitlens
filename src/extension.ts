@@ -30,7 +30,55 @@ import { compare, fromString, satisfies } from './system/version';
 import { isViewNode } from './views/nodes/abstract/viewNode';
 import './commands';
 
+import type { CallContext, CurrentPlugin, Manifest, ManifestWasm } from '@extism/extism';
+import { createPlugin } from '@extism/extism';
+import fetch from 'node-fetch';
+
 export async function activate(context: ExtensionContext): Promise<GitLensApi | undefined> {
+	const extismOutputChannel = window.createOutputChannel('Extism');
+
+	const extismManifest: Manifest = {
+		wasm: [
+			{
+				// path: '/Users/chrisgriffing/repos/gitkraken/private/cli-plugin-go/plugin.wasm',
+				path: '/Users/chrisgriffing/repos/gitkraken/private/cli-plugin-ts/dist/plugin.wasm',
+			},
+		],
+	};
+
+	extismOutputChannel.appendLine("Before creating plugin");
+
+	const plugin = await createPlugin(extismManifest, {
+		useWasi: true,
+		// allowedHosts: ['*'],
+		// runInWorker: true,
+		// fetch: fetch,
+		// enableWasiOutput: true,
+		// allowedPaths: {
+		// 	'/tmp/dat1': 'tmp/dat1',
+		// },
+		functions: {
+			'extism:host/user': {
+				notify: function (cp: CurrentPlugin, rawMessage: bigint) {
+					extismOutputChannel.appendLine("Trying to blend?");
+
+					const message = cp.read(rawMessage)?.string() || "Some default value";
+
+					void window.showInformationMessage(message);
+				},
+			},
+		},
+	}).catch(() => {
+		extismOutputChannel.appendLine("Failed to create plugin");
+	});
+	const out = await plugin?.call('greet', 'Hello, World!').catch((e: unknown) => {
+		extismOutputChannel.appendLine(`Failed to call plugin: ${e as string}`);
+	});
+	extismOutputChannel.appendLine(out?.text() || 'NO OUT TEXT');
+
+	// const foo = await fetch("https://localhost/")
+	// extismOutputChannel.appendLine(`Response from server: ${await foo.text()}`)
+
 	const gitlensVersion: string = context.extension.packageJSON.version;
 	const prerelease = satisfies(gitlensVersion, '> 2020.0.0');
 

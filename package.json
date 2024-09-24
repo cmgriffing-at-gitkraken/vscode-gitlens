@@ -4533,6 +4533,14 @@
 						"markdownDescription": "(Experimental) Specifies the preferred layout of for _Cloud Patches_",
 						"scope": "window",
 						"order": 20
+					},
+
+					"gitlens.plugins.experimental.paths": {
+						"type": "array",
+						"default": [],
+						"markdownDescription": "(Experimental) Specifies the paths to local Extism WASM plugins",
+						"scope": "window",
+						"order": 20
 					}
 				}
 			},
@@ -17935,6 +17943,7 @@
 		"vscode:prepublish": "yarn run bundle"
 	},
 	"dependencies": {
+		"@extism/extism": "^2.0.0-rc6",
 		"@gitkraken/gitkraken-components": "10.5.1",
 		"@gitkraken/provider-apis": "0.24.2",
 		"@gitkraken/shared-web-components": "0.1.1-rc.15",
