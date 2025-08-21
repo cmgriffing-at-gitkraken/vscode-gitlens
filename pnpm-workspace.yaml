@@ -1,0 +1,11 @@
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - '@playwright/browser-chromium'
+  - '@swc/core'
+  - '@vscode/vsce-sign'
+  - esbuild
+  - keytar
+  - protobufjs
+  - sharp
+  - ttf2woff2
+  - unrs-resolver

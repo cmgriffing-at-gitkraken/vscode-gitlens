@@ -101,9 +101,18 @@ export class Container {
 		version: string,
 		previousVersion: string | undefined,
 	): Container {
-		if (Container.#instance != null) throw new Error('Container is already initialized');
+		console.log(`[DEBUG-4541] Container.create called with: prerelease=${prerelease}, version=${version}, previousVersion=${previousVersion || 'none'}`);
+		console.log(`[DEBUG-4541] Container context extension ID: ${context.extension.id}`);
+		console.log(`[DEBUG-4541] Container context extension path: ${context.extension.extensionPath}`);
 
+		if (Container.#instance != null) {
+			console.log(`[DEBUG-4541] Container already initialized, throwing error`);
+			throw new Error('Container is already initialized');
+		}
+
+		console.log(`[DEBUG-4541] Creating new Container instance`);
 		Container.#instance = new Container(context, storage, prerelease, version, previousVersion);
+		console.log(`[DEBUG-4541] Container instance created successfully`);
 		return Container.#instance;
 	}
 
@@ -185,11 +194,21 @@ export class Container {
 		version: string,
 		previousVersion: string | undefined,
 	) {
+		console.log(`[DEBUG-4541] Container constructor called`);
+		console.log(`[DEBUG-4541] Container context: ${context.extension.id}`);
+		console.log(`[DEBUG-4541] Container prerelease: ${prerelease}`);
+		console.log(`[DEBUG-4541] Container version: ${version}`);
+		console.log(`[DEBUG-4541] Container previousVersion: ${previousVersion || 'none'}`);
+
 		this._context = context;
 		this._prerelease = prerelease;
 		this._version = version;
-		this.ensureModeApplied();
+		console.log(`[DEBUG-4541] Container basic properties set`);
 
+		this.ensureModeApplied();
+		console.log(`[DEBUG-4541] Container mode applied`);
+
+		console.log(`[DEBUG-4541] Creating Container disposables`);
 		this._disposables = [
 			configuration,
 			(this._storage = storage),
@@ -197,33 +216,80 @@ export class Container {
 			(this._usage = new UsageTracker(this, storage)),
 			configuration.onDidChangeAny(this.onAnyConfigurationChanged, this),
 		];
+		console.log(`[DEBUG-4541] Basic disposables created`);
 
+		console.log(`[DEBUG-4541] Creating URLs provider`);
 		this._urls = new UrlsProvider(this.env);
 		this._disposables.push((this._connection = new ServerConnection(this, this._urls)));
+		console.log(`[DEBUG-4541] URLs provider and server connection created`);
 
+		console.log(`[DEBUG-4541] Creating authentication provider`);
 		this._disposables.push(
 			(this._accountAuthentication = new AccountAuthenticationProvider(this, this._connection)),
 		);
+		console.log(`[DEBUG-4541] Authentication provider created`);
+
+		console.log(`[DEBUG-4541] Creating URI service`);
 		this._disposables.push((this._uri = new UriService(this)));
+		console.log(`[DEBUG-4541] URI service created`);
+
+		console.log(`[DEBUG-4541] Creating subscription service`);
 		this._disposables.push((this._subscription = new SubscriptionService(this, this._connection, previousVersion)));
+		console.log(`[DEBUG-4541] Subscription service created`);
+
 		if (isWalkthroughSupported()) {
+			console.log(`[DEBUG-4541] Creating walkthrough provider`);
 			this._disposables.push((this._walkthrough = new WalkthroughStateProvider(this)));
+			console.log(`[DEBUG-4541] Walkthrough provider created`);
 		}
+
+		console.log(`[DEBUG-4541] Creating organization service`);
 		this._disposables.push((this._organizations = new OrganizationService(this, this._connection)));
+		console.log(`[DEBUG-4541] Organization service created`);
 
+		console.log(`[DEBUG-4541] Creating git provider service`);
 		this._disposables.push((this._git = new GitProviderService(this)));
+		console.log(`[DEBUG-4541] Git provider service created`);
+
+		console.log(`[DEBUG-4541] Creating git file system provider`);
 		this._disposables.push(new GitFileSystemProvider(this));
+		console.log(`[DEBUG-4541] Git file system provider created`);
 
+		console.log(`[DEBUG-4541] Creating deep link service`);
 		this._disposables.push((this._deepLinks = new DeepLinkService(this)));
+		console.log(`[DEBUG-4541] Deep link service created`);
 
+		console.log(`[DEBUG-4541] Creating action runners`);
 		this._disposables.push((this._actionRunners = new ActionRunners(this)));
+		console.log(`[DEBUG-4541] Action runners created`);
+
+		console.log(`[DEBUG-4541] Creating document tracker`);
 		this._disposables.push((this._documentTracker = new GitDocumentTracker(this)));
+		console.log(`[DEBUG-4541] Document tracker created`);
+
+		console.log(`[DEBUG-4541] Creating line tracker`);
 		this._disposables.push((this._lineTracker = new LineTracker(this, this._documentTracker)));
+		console.log(`[DEBUG-4541] Line tracker created`);
+
+		console.log(`[DEBUG-4541] Creating keyboard`);
 		this._disposables.push((this._keyboard = new Keyboard()));
+		console.log(`[DEBUG-4541] Keyboard created`);
+
+		console.log(`[DEBUG-4541] Creating VSLS controller`);
 		this._disposables.push((this._vsls = new VslsController(this)));
+		console.log(`[DEBUG-4541] VSLS controller created`);
+
+		console.log(`[DEBUG-4541] Creating event bus`);
 		this._disposables.push((this._eventBus = new EventBus()));
+		console.log(`[DEBUG-4541] Event bus created`);
+
+		console.log(`[DEBUG-4541] Creating launchpad provider`);
 		this._disposables.push((this._launchpadProvider = new LaunchpadProvider(this)));
+		console.log(`[DEBUG-4541] Launchpad provider created`);
+
+		console.log(`[DEBUG-4541] Creating markdown provider`);
 		this._disposables.push((this._markdownProvider = new MarkdownContentProvider(this)));
+		console.log(`[DEBUG-4541] Markdown provider created`);
 
 		this._disposables.push((this._fileAnnotationController = new FileAnnotationController(this)));
 		this._disposables.push((this._lineAnnotationController = new LineAnnotationController(this)));
@@ -298,6 +364,8 @@ export class Container {
 		});
 
 		scheduleAddMissingCurrentWorkspaceRepos(this);
+
+		console.log(`[DEBUG-4541] Container constructor completed successfully`);
 	}
 
 	deactivate(): void {

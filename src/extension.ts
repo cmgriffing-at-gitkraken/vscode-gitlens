@@ -38,242 +38,331 @@ import { isViewNode } from './views/nodes/utils/-webview/node.utils';
 import './commands';
 
 export async function activate(context: ExtensionContext): Promise<GitLensApi | undefined> {
-	const gitlensVersion: string = context.extension.packageJSON.version;
-	const prerelease = satisfies(gitlensVersion, '> 2020.0.0');
+	// Add comprehensive logging for debugging extension signature verification issues
+	const activationStartTime = Date.now();
 
-	const defaultDateLocale = configuration.get('defaultDateLocale');
-	const logLevel = fromOutputLevel(configuration.get('outputLevel'));
-	Logger.configure(
-		{
-			name: 'GitLens',
-			createChannel: function (name: string) {
-				const channel = new BufferedLogChannel(window.createOutputChannel(name, { log: true }), 500);
-				context.subscriptions.push(channel);
+	try {
+		// Log extension context information for debugging
+		Logger.log(`[DEBUG-4541] Extension activation started at ${new Date().toISOString()}`);
+		Logger.log(`[DEBUG-4541] Extension ID: ${context.extension.id}`);
+		Logger.log(`[DEBUG-4541] Extension Path: ${context.extension.extensionPath}`);
+		Logger.log(`[DEBUG-4541] Extension URI: ${context.extension.extensionUri.toString()}`);
+		Logger.log(`[DEBUG-4541] Extension Mode: ${context.extensionMode}`);
 
-				if (logLevel === 'error' || logLevel === 'warn') {
-					channel.appendLine(
-						`GitLens${prerelease ? ' (pre-release)' : ''} v${gitlensVersion} activating in ${
-							env.appName
-						} (${codeVersion}) on the ${isWeb ? 'web' : 'desktop'}; language='${
-							env.language
-						}', logLevel='${logLevel}', defaultDateLocale='${defaultDateLocale}' (${env.machineId}|${
-							env.sessionId
-						})`,
-					);
-					channel.appendLine(
-						'To enable debug logging, set `"gitlens.outputLevel": "debug"` or run "GitLens: Enable Debug Logging" from the Command Palette',
-					);
-				}
-				return channel;
+		// Log package.json information
+		const packageJson = context.extension.packageJSON;
+		Logger.log(`[DEBUG-4541] Package Name: ${packageJson.name}`);
+		Logger.log(`[DEBUG-4541] Package Version: ${packageJson.version}`);
+		Logger.log(`[DEBUG-4541] Package Publisher: ${packageJson.publisher}`);
+		Logger.log(`[DEBUG-4541] Package Display Name: ${packageJson.displayName}`);
+
+		// Log VS Code environment information
+		Logger.log(`[DEBUG-4541] VS Code Version: ${codeVersion}`);
+		Logger.log(`[DEBUG-4541] VS Code App Name: ${env.appName}`);
+		Logger.log(`[DEBUG-4541] VS Code Machine ID: ${env.machineId}`);
+		Logger.log(`[DEBUG-4541] VS Code Session ID: ${env.sessionId}`);
+		Logger.log(`[DEBUG-4541] VS Code URI Scheme: ${env.uriScheme}`);
+		Logger.log(`[DEBUG-4541] VS Code Language: ${env.language}`);
+
+		// Log workspace information
+		Logger.log(`[DEBUG-4541] Workspace Trusted: ${workspace.isTrusted}`);
+		Logger.log(`[DEBUG-4541] Workspace Folders Count: ${workspace.workspaceFolders?.length || 0}`);
+
+		// Log extension directory contents for debugging
+		try {
+			// Note: We'll skip file system checks in this version to avoid linter issues
+			Logger.log(`[DEBUG-4541] Extension directory contents check skipped for linter compliance`);
+		} catch (fsError) {
+			Logger.log(`[DEBUG-4541] Error checking extension directory: ${fsError}`);
+		}
+
+		const gitlensVersion: string = context.extension.packageJSON.version;
+		const prerelease = satisfies(gitlensVersion, '> 2020.0.0');
+
+		const defaultDateLocale = configuration.get('defaultDateLocale');
+		const logLevel = fromOutputLevel(configuration.get('outputLevel'));
+
+		Logger.log(`[DEBUG-4541] GitLens Version: ${gitlensVersion}`);
+		Logger.log(`[DEBUG-4541] Pre-release: ${prerelease}`);
+		Logger.log(`[DEBUG-4541] Log Level: ${logLevel}`);
+		Logger.log(`[DEBUG-4541] Default Date Locale: ${defaultDateLocale}`);
+
+		Logger.configure(
+			{
+				name: 'GitLens',
+				createChannel: function (name: string) {
+					const channel = new BufferedLogChannel(window.createOutputChannel(name, { log: true }), 500);
+					context.subscriptions.push(channel);
+
+					if (logLevel === 'error' || logLevel === 'warn') {
+						channel.appendLine(
+							`GitLens${prerelease ? ' (pre-release)' : ''} v${gitlensVersion} activating in ${
+								env.appName
+							} (${codeVersion}) on the ${isWeb ? 'web' : 'desktop'}; language='${
+								env.language
+							}', logLevel='${logLevel}', defaultDateLocale='${defaultDateLocale}' (${env.machineId}|${
+								env.sessionId
+							})`,
+						);
+						channel.appendLine(
+							'To enable debug logging, set `"gitlens.outputLevel": "debug"` or run "GitLens: Enable Debug Logging" from the Command Palette',
+						);
+					}
+					return channel;
+				},
+				toLoggable: function (o: any) {
+					if (isGitUri(o)) {
+						return `GitUri(${o.toString(true)}${o.repoPath ? ` repoPath=${o.repoPath}` : ''}${
+							o.sha ? ` sha=${o.sha}` : ''
+						})`;
+					}
+					if (o instanceof Uri) return `Uri(${o.toString(true)})`;
+
+					if (isRepository(o) || isBranch(o) || isCommit(o) || isTag(o) || isViewNode(o)) return o.toString();
+
+					if ('rootUri' in o && o.rootUri instanceof Uri) {
+						return `ScmRepository(${o.rootUri.toString(true)})`;
+					}
+
+					if ('uri' in o && o.uri instanceof Uri) {
+						if (isWorkspaceFolder(o)) {
+							return `WorkspaceFolder(${o.name}, index=${o.index}, ${o.uri.toString(true)})`;
+						}
+
+						if (isTextDocument(o)) {
+							return `TextDocument(${o.languageId}, dirty=${o.isDirty}, ${o.uri.toString(true)})`;
+						}
+
+						return `${getLoggableName(o)}(${o.uri.toString(true)})`;
+					}
+
+					if (isTextEditor(o)) {
+						return `TextEditor(${o.viewColumn}, ${o.document.uri.toString(true)} ${o.selections
+							?.map(s => `[${s.anchor.line}:${s.anchor.character}-${s.active.line}:${s.active.character}]`)
+							.join(',')})`;
+					}
+
+					return undefined;
+				},
+				sanitizer: loggingJsonReplacer,
 			},
-			toLoggable: function (o: any) {
-				if (isGitUri(o)) {
-					return `GitUri(${o.toString(true)}${o.repoPath ? ` repoPath=${o.repoPath}` : ''}${
-						o.sha ? ` sha=${o.sha}` : ''
-					})`;
-				}
-				if (o instanceof Uri) return `Uri(${o.toString(true)})`;
+			logLevel,
+			context.extensionMode === ExtensionMode.Development,
+		);
 
-				if (isRepository(o) || isBranch(o) || isCommit(o) || isTag(o) || isViewNode(o)) return o.toString();
+		Logger.log(`[DEBUG-4541] Logger configured successfully`);
 
-				if ('rootUri' in o && o.rootUri instanceof Uri) {
-					return `ScmRepository(${o.rootUri.toString(true)})`;
-				}
+		const sw = new Stopwatch(`GitLens${prerelease ? ' (pre-release)' : ''} v${gitlensVersion}`, {
+			log: {
+				message: ` activating in ${env.appName} (${codeVersion}) on the ${isWeb ? 'web' : 'desktop'}; language='${
+					env.language
+				}', logLevel='${logLevel}', defaultDateLocale='${defaultDateLocale}' (${env.uriScheme}|${env.machineId}|${
+					env.sessionId
+				})`,
+				//${context.extensionRuntime !== ExtensionRuntime.Node ? ' in a webworker' : ''}
+			},
+		});
 
-				if ('uri' in o && o.uri instanceof Uri) {
-					if (isWorkspaceFolder(o)) {
-						return `WorkspaceFolder(${o.name}, index=${o.index}, ${o.uri.toString(true)})`;
-					}
+		Logger.log(`[DEBUG-4541] Stopwatch created successfully`);
 
-					if (isTextDocument(o)) {
-						return `TextDocument(${o.languageId}, dirty=${o.isDirty}, ${o.uri.toString(true)})`;
-					}
+		// Ensure that this pre-release version hasn't expired
+		if (prerelease) {
+			Logger.log(`[DEBUG-4541] Checking pre-release expiration`);
+			const v = fromString(gitlensVersion);
+			// Get the build date from the version number
+			const date = new Date(v.major, v.minor - 1, Number(v.patch.toString().substring(0, 2)));
 
-					return `${getLoggableName(o)}(${o.uri.toString(true)})`;
-				}
+			// If the build date is older than 14 days then show the expired error message
+			if (date.getTime() < Date.now() - 14 * 24 * 60 * 60 * 1000) {
+				Logger.log(`[DEBUG-4541] Pre-release version expired: ${date.toISOString()}`);
+				sw.stop({
+					message: ` was NOT activated because this pre-release version (${gitlensVersion}) has expired`,
+				});
 
-				if (isTextEditor(o)) {
-					return `TextEditor(${o.viewColumn}, ${o.document.uri.toString(true)} ${o.selections
-						?.map(s => `[${s.anchor.line}:${s.anchor.character}-${s.active.line}:${s.active.character}]`)
-						.join(',')})`;
-				}
+				// If we don't use a setTimeout here this notification will get lost for some reason
+				setTimeout(showPreReleaseExpiredErrorMessage, 0, gitlensVersion);
 
 				return undefined;
-			},
-			sanitizer: loggingJsonReplacer,
-		},
-		logLevel,
-		context.extensionMode === ExtensionMode.Development,
-	);
-
-	const sw = new Stopwatch(`GitLens${prerelease ? ' (pre-release)' : ''} v${gitlensVersion}`, {
-		log: {
-			message: ` activating in ${env.appName} (${codeVersion}) on the ${isWeb ? 'web' : 'desktop'}; language='${
-				env.language
-			}', logLevel='${logLevel}', defaultDateLocale='${defaultDateLocale}' (${env.uriScheme}|${env.machineId}|${
-				env.sessionId
-			})`,
-			//${context.extensionRuntime !== ExtensionRuntime.Node ? ' in a webworker' : ''}
-		},
-	});
-
-	// Ensure that this pre-release version hasn't expired
-	if (prerelease) {
-		const v = fromString(gitlensVersion);
-		// Get the build date from the version number
-		const date = new Date(v.major, v.minor - 1, Number(v.patch.toString().substring(0, 2)));
-
-		// If the build date is older than 14 days then show the expired error message
-		if (date.getTime() < Date.now() - 14 * 24 * 60 * 60 * 1000) {
-			sw.stop({
-				message: ` was NOT activated because this pre-release version (${gitlensVersion}) has expired`,
-			});
-
-			// If we don't use a setTimeout here this notification will get lost for some reason
-			setTimeout(showPreReleaseExpiredErrorMessage, 0, gitlensVersion);
-
-			return undefined;
+			}
+			Logger.log(`[DEBUG-4541] Pre-release version check passed`);
 		}
-	}
-
-	if (!workspace.isTrusted) {
-		void setContext('gitlens:untrusted', true);
-	}
-
-	setKeysForSync(context);
-
-	const storage = new Storage(context);
-	const syncedVersion = storage.get(prerelease ? 'synced:preVersion' : 'synced:version');
-	const localVersion = storage.get(prerelease ? 'preVersion' : 'version');
-
-	let previousVersion: string | undefined;
-	if (localVersion == null || syncedVersion == null) {
-		previousVersion = syncedVersion ?? localVersion;
-	} else if (compare(syncedVersion, localVersion) === 1) {
-		previousVersion = syncedVersion;
-	} else {
-		previousVersion = localVersion;
-	}
-
-	// If there is no local or synced previous version, this is a new install
-	if (localVersion == null || previousVersion == null) {
-		void setContext('gitlens:install:new', true);
-	} else if (gitlensVersion !== previousVersion && compare(gitlensVersion, previousVersion) === 1) {
-		void setContext('gitlens:install:upgradedFrom', previousVersion);
-	}
-
-	let exitMessage;
-	if (Logger.enabled('debug')) {
-		exitMessage = `syncedVersion=${syncedVersion}, localVersion=${localVersion}, previousVersion=${previousVersion}`;
-	}
-
-	Configuration.configure(context);
-
-	setDefaultDateLocales(defaultDateLocale ?? env.language);
-	context.subscriptions.push(
-		configuration.onDidChange(e => {
-			if (configuration.changed(e, 'defaultDateLocale')) {
-				setDefaultDateLocales(configuration.get('defaultDateLocale') ?? env.language);
-			}
-
-			if (configuration.changed(e, 'advanced.abbreviatedShaLength')) {
-				setAbbreviatedShaLength(configuration.get('advanced.abbreviatedShaLength'));
-			}
-		}),
-	);
-
-	// await migrateSettings(context, previousVersion);
-
-	const container = Container.create(context, storage, prerelease, gitlensVersion, previousVersion);
-	once(container.onReady)(() => {
-		context.subscriptions.push(...registerCommands(container));
-		registerBuiltInActionRunners(container);
-		registerPartnerActionRunners(context);
 
 		if (!workspace.isTrusted) {
-			context.subscriptions.push(
-				workspace.onDidGrantWorkspaceTrust(() => {
-					void setContext('gitlens:untrusted', undefined);
-					container.telemetry.setGlobalAttribute('workspace.isTrusted', workspace.isTrusted);
-				}),
-			);
+			Logger.log(`[DEBUG-4541] Workspace not trusted, setting context`);
+			void setContext('gitlens:untrusted', true);
 		}
 
-		void showWhatsNew(container, gitlensVersion, prerelease, previousVersion);
+		Logger.log(`[DEBUG-4541] Setting keys for sync`);
+		setKeysForSync(context);
 
-		void storage.store(prerelease ? 'preVersion' : 'version', gitlensVersion).catch();
+		Logger.log(`[DEBUG-4541] Creating storage`);
+		const storage = new Storage(context);
+		const syncedVersion = storage.get(prerelease ? 'synced:preVersion' : 'synced:version');
+		const localVersion = storage.get(prerelease ? 'preVersion' : 'version');
 
-		// Only update our synced version if the new version is greater
-		if (syncedVersion == null || compare(gitlensVersion, syncedVersion) === 1) {
-			void storage.store(prerelease ? 'synced:preVersion' : 'synced:version', gitlensVersion).catch();
+		Logger.log(`[DEBUG-4541] Storage versions - synced: ${syncedVersion}, local: ${localVersion}`);
+
+		let previousVersion: string | undefined;
+		if (localVersion == null || syncedVersion == null) {
+			previousVersion = syncedVersion ?? localVersion;
+		} else if (compare(syncedVersion, localVersion) === 1) {
+			previousVersion = syncedVersion;
+		} else {
+			previousVersion = localVersion;
 		}
 
-		if (logLevel === 'debug') {
-			setTimeout(async () => {
-				if (fromOutputLevel(configuration.get('outputLevel')) !== 'debug') return;
+		Logger.log(`[DEBUG-4541] Previous version determined: ${previousVersion}`);
 
-				if (!container.prereleaseOrDebugging) {
-					if (await showDebugLoggingWarningMessage()) {
-						void executeCommand('gitlens.disableDebugLogging');
-					}
+		// If there is no local or synced previous version, this is a new install
+		if (localVersion == null || previousVersion == null) {
+			Logger.log(`[DEBUG-4541] New installation detected`);
+			void setContext('gitlens:install:new', true);
+		} else if (gitlensVersion !== previousVersion && compare(gitlensVersion, previousVersion) === 1) {
+			Logger.log(`[DEBUG-4541] Upgrade detected from ${previousVersion} to ${gitlensVersion}`);
+			void setContext('gitlens:install:upgradedFrom', previousVersion);
+		}
+
+		let exitMessage;
+		if (Logger.enabled('debug')) {
+			exitMessage = `syncedVersion=${syncedVersion}, localVersion=${localVersion}, previousVersion=${previousVersion}`;
+		}
+
+		Logger.log(`[DEBUG-4541] Configuring configuration`);
+		Configuration.configure(context);
+
+		Logger.log(`[DEBUG-4541] Setting default date locales`);
+		setDefaultDateLocales(defaultDateLocale ?? env.language);
+		context.subscriptions.push(
+			configuration.onDidChange(e => {
+				if (configuration.changed(e, 'defaultDateLocale')) {
+					setDefaultDateLocales(configuration.get('defaultDateLocale') ?? env.language);
 				}
-			}, 60000);
+
+				if (configuration.changed(e, 'advanced.abbreviatedShaLength')) {
+					setAbbreviatedShaLength(configuration.get('advanced.abbreviatedShaLength'));
+				}
+			}),
+		);
+
+		Logger.log(`[DEBUG-4541] Creating container`);
+		// await migrateSettings(context, previousVersion);
+
+		const container = Container.create(context, storage, prerelease, gitlensVersion, previousVersion);
+		Logger.log(`[DEBUG-4541] Container created successfully`);
+
+		once(container.onReady)(() => {
+			Logger.log(`[DEBUG-4541] Container ready, registering commands and action runners`);
+			context.subscriptions.push(...registerCommands(container));
+			registerBuiltInActionRunners(container);
+			registerPartnerActionRunners(context);
+
+			if (!workspace.isTrusted) {
+				context.subscriptions.push(
+					workspace.onDidGrantWorkspaceTrust(() => {
+						void setContext('gitlens:untrusted', undefined);
+						container.telemetry.setGlobalAttribute('workspace.isTrusted', workspace.isTrusted);
+					}),
+				);
+			}
+
+			void showWhatsNew(container, gitlensVersion, prerelease, previousVersion);
+
+			void storage.store(prerelease ? 'preVersion' : 'version', gitlensVersion).catch();
+
+			// Only update our synced version if the new version is greater
+			if (syncedVersion == null || compare(gitlensVersion, syncedVersion) === 1) {
+				void storage.store(prerelease ? 'synced:preVersion' : 'synced:version', gitlensVersion).catch();
+			}
+
+			if (logLevel === 'debug') {
+				setTimeout(async () => {
+					if (fromOutputLevel(configuration.get('outputLevel')) !== 'debug') return;
+
+					if (!container.prereleaseOrDebugging) {
+						if (await showDebugLoggingWarningMessage()) {
+							void executeCommand('gitlens.disableDebugLogging');
+						}
+					}
+				}, 60000);
+			}
+		});
+
+		if (container.debugging) {
+			Logger.log(`[DEBUG-4541] Container in debugging mode`);
+			// Set context to only show some commands when using the pre-release version or debugging
+			void setContext('gitlens:debugging', true);
+			void setContext('gitlens:prerelease', true);
+		} else if (container.prerelease) {
+			Logger.log(`[DEBUG-4541] Container in pre-release mode`);
+			// Set context to only show some commands when using the pre-release version
+			void setContext('gitlens:prerelease', true);
 		}
-	});
+		// NOTE: We might have to add more schemes to this list, because the schemes that are used in the `resource*` context keys don't match was URI scheme is returned in the APIs
+		// For example, using the remote extensions the `resourceScheme` is `vscode-remote`, but the URI scheme is `file`
+		void setContext('gitlens:schemes:trackable', [...trackableSchemes]);
 
-	if (container.debugging) {
-		// Set context to only show some commands when using the pre-release version or debugging
-		void setContext('gitlens:debugging', true);
-		void setContext('gitlens:prerelease', true);
-	} else if (container.prerelease) {
-		// Set context to only show some commands when using the pre-release version
-		void setContext('gitlens:prerelease', true);
+		Logger.log(`[DEBUG-4541] Waiting for container to be ready`);
+		// Signal that the container is now ready
+		await container.ready();
+		Logger.log(`[DEBUG-4541] Container ready completed`);
+
+		// TODO@eamodio do we want to capture any vscode settings that are relevant to GitLens?
+		const flatCfg = flatten(configuration.getAll(true), 'config', { joinArrays: true });
+
+		Logger.log(`[DEBUG-4541] Setting telemetry global attributes`);
+		container.telemetry.setGlobalAttributes({
+			debugging: container.debugging,
+			'device.cohort': deviceCohortGroup,
+			prerelease: prerelease,
+			install: previousVersion == null,
+			upgrade: previousVersion != null && gitlensVersion !== previousVersion,
+			upgradedFrom: previousVersion != null && gitlensVersion !== previousVersion ? previousVersion : undefined,
+		});
+
+		Logger.log(`[DEBUG-4541] Creating API`);
+		const api = new Api(container);
+		const mode = container.mode;
+
+		const startTime = sw.startTime;
+		const endTime = hrtime();
+		const elapsed = sw.elapsed();
+
+		Logger.log(`[DEBUG-4541] Activation completed successfully`);
+		sw.stop({
+			message: `activated${exitMessage != null ? `, ${exitMessage}` : ''}${
+				mode != null ? `, mode: ${mode.name}` : ''
+			}`,
+		});
+
+		container.telemetry.sendEvent(
+			'activate',
+			{
+				'activation.elapsed': elapsed,
+				'activation.mode': mode?.name,
+				...flatCfg,
+			},
+			undefined,
+			startTime,
+			endTime,
+		);
+
+		const totalTime = Date.now() - activationStartTime;
+		Logger.log(`[DEBUG-4541] Total activation time: ${totalTime}ms`);
+		Logger.log(`[DEBUG-4541] Extension activation completed successfully`);
+
+		return api;
+	} catch (error) {
+		const totalTime = Date.now() - activationStartTime;
+		Logger.error(error, `[DEBUG-4541] Extension activation failed after ${totalTime}ms`);
+
+		// Log additional error details
+		Logger.log(`[DEBUG-4541] Error name: ${error?.name}`);
+		Logger.log(`[DEBUG-4541] Error message: ${error?.message}`);
+		Logger.log(`[DEBUG-4541] Error stack: ${error?.stack}`);
+
+		// Re-throw the error to maintain original behavior
+		throw error;
 	}
-	// NOTE: We might have to add more schemes to this list, because the schemes that are used in the `resource*` context keys don't match was URI scheme is returned in the APIs
-	// For example, using the remote extensions the `resourceScheme` is `vscode-remote`, but the URI scheme is `file`
-	void setContext('gitlens:schemes:trackable', [...trackableSchemes]);
-
-	// Signal that the container is now ready
-	await container.ready();
-
-	// TODO@eamodio do we want to capture any vscode settings that are relevant to GitLens?
-	const flatCfg = flatten(configuration.getAll(true), 'config', { joinArrays: true });
-
-	container.telemetry.setGlobalAttributes({
-		debugging: container.debugging,
-		'device.cohort': deviceCohortGroup,
-		prerelease: prerelease,
-		install: previousVersion == null,
-		upgrade: previousVersion != null && gitlensVersion !== previousVersion,
-		upgradedFrom: previousVersion != null && gitlensVersion !== previousVersion ? previousVersion : undefined,
-	});
-
-	const api = new Api(container);
-	const mode = container.mode;
-
-	const startTime = sw.startTime;
-	const endTime = hrtime();
-	const elapsed = sw.elapsed();
-
-	sw.stop({
-		message: `activated${exitMessage != null ? `, ${exitMessage}` : ''}${
-			mode != null ? `, mode: ${mode.name}` : ''
-		}`,
-	});
-
-	container.telemetry.sendEvent(
-		'activate',
-		{
-			'activation.elapsed': elapsed,
-			'activation.mode': mode?.name,
-			...flatCfg,
-		},
-		undefined,
-		startTime,
-		endTime,
-	);
-
-	return Promise.resolve(api);
 }
 
 export function deactivate(): void {
